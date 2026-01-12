@@ -1,3 +1,6 @@
+// Only run this file in a browser environment (prevent execution when pushed to GAS)
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+
 // 全域變數
 let currentUserEmail = '';
 let periodsData = [];
@@ -61,6 +64,8 @@ async function loadInitialData() {
         }
     }
 }
+
+} // end browser-only wrapper
 
 // JSONP fallback for getInitData (for CORS-restricted environments)
 function loadInitialDataJSONP() {
