@@ -52,8 +52,56 @@ async function loadInitialData() {
         }
     } catch (error) {
         console.error('載入初始資料錯誤:', error);
-        throw error;
+        // fetch 可能被 CORS 阻擋，改用 JSONP fallback
+        try {
+            await loadInitialDataJSONP();
+        } catch (jsonpErr) {
+            console.error('JSONP 載入也失敗:', jsonpErr);
+            throw error;
+        }
     }
+}
+
+// JSONP fallback for getInitData (for CORS-restricted environments)
+function loadInitialDataJSONP() {
+    return new Promise((resolve, reject) => {
+        const callbackName = '_initDataCallback_' + Date.now();
+        window[callbackName] = function(data) {
+            try {
+                if (data && data.success) {
+                    currentUserEmail = data.email;
+                    periodsData = data.periods;
+                    gearsData = data.gears;
+
+                    document.getElementById('emailDisplay').textContent = currentUserEmail;
+                    document.getElementById('openSpreadsheetLink').href =
+                        `https://docs.google.com/spreadsheets/d/${API_CONFIG.SHEET_ID}/edit`;
+
+                    renderPeriods();
+                    renderGears();
+                    loadTop20Bookings();
+                    resolve();
+                } else {
+                    reject(new Error(data && data.message ? data.message : 'JSONP returned error'));
+                }
+            } catch (e) {
+                reject(e);
+            } finally {
+                try { delete window[callbackName]; } catch(e){}
+                var script = document.getElementById(callbackName + '_script');
+                if (script && script.parentNode) script.parentNode.removeChild(script);
+            }
+        };
+
+        const script = document.createElement('script');
+        script.id = callbackName + '_script';
+        script.src = API_ENDPOINTS.getInitData + '&callback=' + callbackName;
+        script.onerror = function(e) {
+            try { delete window[callbackName]; } catch(e){}
+            reject(new Error('JSONP script load error'));
+        };
+        document.head.appendChild(script);
+    });
 }
 
 // 渲染節次選項
