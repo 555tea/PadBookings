@@ -109,6 +109,29 @@ function loadInitialDataJSONP() {
     });
 }
 
+// Generic JSONP request helper
+function jsonpRequest(url) {
+    return new Promise((resolve, reject) => {
+        const callbackName = '_jsonp_cb_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+        window[callbackName] = function(data) {
+            try { resolve(data); } catch (e) { reject(e); } finally {
+                try { delete window[callbackName]; } catch(e){}
+                var s = document.getElementById(callbackName + '_script');
+                if (s && s.parentNode) s.parentNode.removeChild(s);
+            }
+        };
+
+        const script = document.createElement('script');
+        script.id = callbackName + '_script';
+        script.src = url + (url.indexOf('?') === -1 ? '?' : '&') + 'callback=' + callbackName;
+        script.onerror = function() {
+            try { delete window[callbackName]; } catch(e){}
+            reject(new Error('JSONP load error'));
+        };
+        document.head.appendChild(script);
+    });
+}
+
 // 渲染節次選項
 function renderPeriods() {
     const container = document.getElementById('periodsContainer');
@@ -307,8 +330,29 @@ async function checkGearAvailability() {
         }
     } catch (error) {
         console.error('檢查設備可用性錯誤:', error);
-        showAlert('檢查設備可用性失敗：' + error.message, 'danger');
-        updateAvailabilityInfo('檢查設備可用性失敗');
+        console.warn('嘗試使用 JSONP 回退 getAvailableGears');
+        try {
+            const date = booking_date;
+            const periodsParam = encodeURIComponent(JSON.stringify(selectedPeriods));
+            const url = API_ENDPOINTS.getAvailableGears + '?date=' + encodeURIComponent(date) + '&periods=' + periodsParam;
+            const jsonpData = await jsonpRequest(url);
+            if (jsonpData && jsonpData.success) {
+                updateGearAvailability(jsonpData.gears);
+                const unavailableCount = jsonpData.gears.filter(gear => !gear.available).length;
+                if (unavailableCount > 0) {
+                    updateAvailabilityInfo(`${unavailableCount} 項設備在選定時間已被借用`);
+                } else {
+                    updateAvailabilityInfo('所有設備在選定時間皆可借用');
+                }
+            } else {
+                showAlert('檢查設備可用性失敗：' + (jsonpData && jsonpData.message ? jsonpData.message : 'JSONP error'), 'danger');
+                updateAvailabilityInfo('檢查設備可用性失敗');
+            }
+        } catch (jsonpErr) {
+            console.error('JSONP fallback failed:', jsonpErr);
+            showAlert('檢查設備可用性失敗：' + (jsonpErr.message || jsonpErr), 'danger');
+            updateAvailabilityInfo('檢查設備可用性失敗');
+        }
     }
 }
 
@@ -497,7 +541,19 @@ async function updateBookingsByDate() {
         }
     } catch (error) {
         console.error('讀取借用記錄錯誤:', error);
-        showAlert('讀取預約日借用狀況失敗：' + error.message, 'danger');
+        // JSONP fallback for read-only GET
+        try {
+            const url = API_ENDPOINTS.getBookingsByDate + '?date=' + encodeURIComponent(booking_date_string);
+            const jsonpData = await jsonpRequest(url);
+            if (jsonpData && jsonpData.success) {
+                renderBookingsTable(jsonpData.bookings);
+            } else {
+                showAlert('讀取預約日借用狀況失敗：' + (jsonpData && jsonpData.message ? jsonpData.message : 'JSONP error'), 'danger');
+            }
+        } catch (jsonpErr) {
+            console.error('JSONP fallback failed:', jsonpErr);
+            showAlert('讀取預約日借用狀況失敗：' + (jsonpErr.message || jsonpErr), 'danger');
+        }
     }
 
     updateGearStatusTable();
@@ -867,7 +923,19 @@ async function updateGearStatusTable() {
         }
     } catch (error) {
         console.error('獲取設備狀況失敗:', error);
-        showGearStatusError('載入設備狀況失敗：' + error.message);
+        // JSONP fallback for getGearStatus
+        try {
+            const url = API_ENDPOINTS.getGearStatus + '?date=' + encodeURIComponent(booking_date);
+            const jsonpData = await jsonpRequest(url);
+            if (jsonpData && jsonpData.success) {
+                renderGearStatusTable(jsonpData.gearStatus);
+            } else {
+                showGearStatusError('載入設備狀況失敗：' + (jsonpData && jsonpData.message ? jsonpData.message : 'JSONP error'));
+            }
+        } catch (jsonpErr) {
+            console.error('JSONP fallback failed:', jsonpErr);
+            showGearStatusError('載入設備狀況失敗：' + (jsonpErr.message || jsonpErr));
+        }
     }
 }
 
