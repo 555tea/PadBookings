@@ -181,59 +181,90 @@ function getAvailableGearsForDateAndPeriods(date_string, selectedPeriodsFromUI) 
 }
 
 function getBookingsByDate(date_string) {
-    var targetDate = new Date(date_string);
-    Logger.log("getBookingsByDate: " + targetDate);
-    
+    // Normalize target date to YYYY-MM-DD for reliable comparisons
+    function toYMD(d) {
+        if (!(d instanceof Date) || isNaN(d.getTime())) return null;
+        var y = d.getFullYear();
+        var m = ('0' + (d.getMonth() + 1)).slice(-2);
+        var day = ('0' + d.getDate()).slice(-2);
+        return y + '-' + m + '-' + day;
+    }
+
+    var target = new Date(date_string);
+    var targetYMD = toYMD(new Date(target.getFullYear(), target.getMonth(), target.getDate()));
+    Logger.log('getBookingsByDate targetYMD: ' + targetYMD + ' (raw input: ' + date_string + ')');
+
     var lastColumn = bookings.getLastColumn();
     var lastRow = bookings.getLastRow();
-    Logger.log("lastColumn: " + lastColumn + ", lastRow: " + lastRow);
-    
+    Logger.log('lastColumn: ' + lastColumn + ', lastRow: ' + lastRow);
+
+    if (!lastRow || lastRow < 2) {
+        Logger.log('No booking rows found.');
+        return JSON.stringify([]);
+    }
+
     var range = bookings.getRange(1, 1, lastRow, lastColumn);
     var data = range.getValues();
-    
+
     // 列印標題行以確認欄位順序
-    Logger.log("Headers: " + data[0].join(', '));
-    Logger.log("Headers with index: ");
-    for (var h = 0; h < data[0].length; h++) {
-        Logger.log("[" + h + "] " + data[0][h]);
-    }
-  
-    targetDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-    Logger.log("Formatted target date: " + targetDate);
-    
+    Logger.log('Headers: ' + data[0].join(', '));
+
     // 找到日期欄位的正確索引
     var dateColumnIndex = -1;
     for (var i = 0; i < data[0].length; i++) {
-        var header = data[0][i].toString().toLowerCase();
-        if (header.includes('日期') || header.includes('date')) {
+        var header = data[0][i] ? data[0][i].toString().toLowerCase() : '';
+        if (header.indexOf('日期') !== -1 || header.indexOf('date') !== -1) {
             dateColumnIndex = i;
             break;
         }
     }
-    
+
     if (dateColumnIndex === -1) {
-        Logger.log("ERROR: 找不到日期欄位");
+        Logger.log('ERROR: 找不到日期欄位');
         return JSON.stringify([]);
     }
-    
-    Logger.log("Using date column index: " + dateColumnIndex);
-  
-    var filteredData = data.filter(function (row, index) {
-      if (index === 0) return false; // 跳過標題行
-      
-      var rowDate = new Date(row[dateColumnIndex]);
-      rowDate = new Date(rowDate.getFullYear(), rowDate.getMonth(), rowDate.getDate());
-      
-      Logger.log("Row " + index + " date: " + rowDate + " vs target: " + targetDate);
-      return rowDate.getTime() === targetDate.getTime();
-    });
-    
-    Logger.log("Filtered data count: " + filteredData.length);
-    filteredData.forEach(function (row, index) {
-      Logger.log('Filtered Row ' + (index + 1) + ': ' + row.join(', '));
+
+    Logger.log('Using date column index: ' + dateColumnIndex);
+
+    var filtered = [];
+    // Skip header (start from index 1)
+    for (var r = 1; r < data.length; r++) {
+        var cell = data[r][dateColumnIndex];
+        var rowYMD = null;
+
+        if (cell instanceof Date && !isNaN(cell.getTime())) {
+            rowYMD = toYMD(new Date(cell.getFullYear(), cell.getMonth(), cell.getDate()));
+        } else if (cell !== null && cell !== undefined && String(cell).trim() !== '') {
+            var s = String(cell).trim();
+            // Try common formats: YYYY-MM-DD or YYYY/MM/DD
+            var m;
+            if (/^\d{4}[-\/]\d{1,2}[-\/]\d{1,2}$/.test(s)) {
+                var parts = s.replace(/\//g, '-').split('-');
+                var y = parseInt(parts[0], 10);
+                var mo = parseInt(parts[1], 10) - 1;
+                var d = parseInt(parts[2], 10);
+                var parsed = new Date(y, mo, d);
+                if (!isNaN(parsed.getTime())) rowYMD = toYMD(parsed);
+            } else {
+                // Fallback: try Date constructor
+                var parsed2 = new Date(s);
+                if (!isNaN(parsed2.getTime())) rowYMD = toYMD(new Date(parsed2.getFullYear(), parsed2.getMonth(), parsed2.getDate()));
+            }
+        }
+
+        Logger.log('Row ' + (r + 1) + ' raw date cell: ' + cell + ' parsedYMD: ' + rowYMD);
+
+        if (rowYMD && targetYMD && rowYMD === targetYMD) {
+            filtered.push(data[r]);
+        }
+    }
+
+    Logger.log('Filtered data count: ' + filtered.length);
+    filtered.forEach(function(row, idx) {
+        Logger.log('Filtered Row ' + (idx + 1) + ': ' + row.join(', '));
     });
 
-    return JSON.stringify(filteredData);
+    return JSON.stringify(filtered);
 }
 
 // 修正：取得特定日期的設備狀況
