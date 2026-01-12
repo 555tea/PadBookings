@@ -31,10 +31,9 @@ document.addEventListener('DOMContentLoaded', async function() {
 // 載入初始資料
 async function loadInitialData() {
     try {
-        const response = await fetch(API_ENDPOINTS.getInitData);
-        const data = await response.json();
-        
-        if (data.success) {
+        // Use JSONP for initial data to avoid CORS preflight issues
+        const data = await jsonpRequest(API_ENDPOINTS.getInitData);
+        if (data && data.success) {
             currentUserEmail = data.email;
             periodsData = data.periods;
             gearsData = data.gears;
@@ -301,20 +300,10 @@ async function checkGearAvailability() {
     updateAvailabilityInfo('檢查設備可用性中...');
     
     try {
-        const response = await fetch(API_ENDPOINTS.getAvailableGears, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                date: booking_date,
-                periods: selectedPeriods
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
+        // Use JSONP GET for read-only available gears
+        const url = API_ENDPOINTS.getAvailableGears + '?date=' + encodeURIComponent(booking_date) + '&periods=' + encodeURIComponent(JSON.stringify(selectedPeriods));
+        const data = await jsonpRequest(url);
+        if (data && data.success) {
             const availableGears = data.gears;
             updateGearAvailability(availableGears);
             
@@ -470,9 +459,7 @@ async function submitInput() {
                 selectedGearRadioValue
             })
         });
-        
         const data = await response.json();
-        
         if (data.success) {
             showAlert('新增成功！已同步到日曆系統。', 'success');
             
@@ -524,36 +511,17 @@ async function updateBookingsByDate() {
     title.innerHTML = `<i class="bi bi-calendar-check me-2"></i>${booking_date_string} 已借用紀錄`;
 
     try {
-        const response = await fetch(API_ENDPOINTS.getBookingsByDate, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ date: booking_date_string })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
+        // Use JSONP GET for bookings by date
+        const url = API_ENDPOINTS.getBookingsByDate + '?date=' + encodeURIComponent(booking_date_string);
+        const data = await jsonpRequest(url);
+        if (data && data.success) {
             renderBookingsTable(data.bookings);
         } else {
             showAlert('讀取預約日借用狀況失敗：' + data.message, 'danger');
         }
     } catch (error) {
         console.error('讀取借用記錄錯誤:', error);
-        // JSONP fallback for read-only GET
-        try {
-            const url = API_ENDPOINTS.getBookingsByDate + '?date=' + encodeURIComponent(booking_date_string);
-            const jsonpData = await jsonpRequest(url);
-            if (jsonpData && jsonpData.success) {
-                renderBookingsTable(jsonpData.bookings);
-            } else {
-                showAlert('讀取預約日借用狀況失敗：' + (jsonpData && jsonpData.message ? jsonpData.message : 'JSONP error'), 'danger');
-            }
-        } catch (jsonpErr) {
-            console.error('JSONP fallback failed:', jsonpErr);
-            showAlert('讀取預約日借用狀況失敗：' + (jsonpErr.message || jsonpErr), 'danger');
-        }
+        showAlert('讀取預約日借用狀況失敗：' + (error.message || error), 'danger');
     }
 
     updateGearStatusTable();
