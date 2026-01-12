@@ -6,7 +6,8 @@ var gears = SPREADSHEET.getSheetByName('Gears');
 var periods = SPREADSHEET.getSheetByName('Periods');
 
 
-function doGet() {
+// 已移至 index_api.gs，使用純 API 模式
+function doGetOld() {
   var template = HtmlService.createTemplateFromFile('Bookings.html');
   // template.data = getDataFromSheet();
   template.bookings = getTop20Bookings();

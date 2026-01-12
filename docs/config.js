@@ -3,6 +3,7 @@
 const API_CONFIG = {
     // 將此 URL 替換為您的 Google Apps Script Web App URL
     // 格式: https://script.google.com/macros/s/{SCRIPT_ID}/exec
+    //         https://script.google.com/macros/s/AKfycbw6H5INo3SEhl_u1q4ZmFxtnYtiVTlZE3BAE6mL6OIQjzQT4WCgvfBjn8WsCMjNWUQ/exec
     BASE_URL: 'https://script.google.com/macros/s/AKfycbw6H5INo3SEhl_u1q4ZmFxtnYtiVTlZE3BAE6mL6OIQjzQT4WCgvfBjn8WsCMjNWUQ/exec',
     
     // Google Spreadsheet ID (用於開啟試算表連結)
